@@ -9,8 +9,8 @@ apply plugin: "com.jfrog.bintray"
 version = rootProject.blaubot_version
 
 android {
-    compileSdkVersion 21
-    buildToolsVersion '23.0.1'
+    compileSdkVersion 23
+    buildToolsVersion '23.0.2'
 
     lintOptions {
         abortOnError false // don't fail on missing permissions (is a library)
@@ -18,7 +18,7 @@ android {
 
     defaultConfig {
         minSdkVersion 16
-        targetSdkVersion 21
+        targetSdkVersion 22
     }
 
     buildTypes {
@@ -39,7 +39,7 @@ android {
 dependencies {
     compile project(':blaubot')
     // Apache 2.0
-    compile 'org.apache.commons:commons-collections4:4.0'
+    compile 'org.apache.commons:commons-collections4:4.1'
 }
 
 /*

@@ -28,7 +28,7 @@ import eu.hgross.blaubot.util.Log;
 /**
  * An Acceptor handling incoming bluetooth connections.
  *
- * @author Henning Gross <mail.to@henning-gross.de>
+ * @author Henning Gross {@literal (mail.to@henning-gross.de)}
  */
 public class BlaubotJsr82BluetoothAcceptor implements IBlaubotConnectionAcceptor {
     private static final String LOG_TAG = BlaubotJsr82BluetoothAcceptor.class.toString();
@@ -42,8 +42,7 @@ public class BlaubotJsr82BluetoothAcceptor implements IBlaubotConnectionAcceptor
     private IBlaubotBeaconStore beaconStore;
 
     /**
-     *
-     * @param blaubotBluetoothAdapter
+     * @param blaubotBluetoothAdapter the blaubot adapter
      * @throws BluetoothStateException if we cannot acces the hardware bluetooth adapter
      */
     public BlaubotJsr82BluetoothAcceptor(BlaubotJsr82BluetoothAdapter blaubotBluetoothAdapter) throws BluetoothStateException {
@@ -144,7 +143,7 @@ public class BlaubotJsr82BluetoothAcceptor implements IBlaubotConnectionAcceptor
     /**
      * Handles initial BlauBot instance communication. Once a client connects, the connected socket is handed over to the {@link BlaubotConnectionManager} clientConnections
      *
-     * @author Henning Gross <mail.to@henning-gross.de>
+     * @author Henning Gross {@literal (mail.to@henning-gross.de)}
      */
     public class Jsr82BluetoothAcceptThread extends Thread {
         private final String LOG_TAG = "Jsr82BluetoothAcceptor.Jsr82BluetoothAcceptThread";

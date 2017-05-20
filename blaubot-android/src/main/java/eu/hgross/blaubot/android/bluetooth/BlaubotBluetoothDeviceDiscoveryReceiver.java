@@ -20,7 +20,7 @@ import eu.hgross.blaubot.util.Log;
 /**
  * Decoupled receiver object to find devices via the bluetooth adapter's discovery method.
  * 
- * @author Henning Gross <mail.to@henning-gross.de>
+ * @author Henning Gross {@literal (mail.to@henning-gross.de)}
  * 
  */
 public class BlaubotBluetoothDeviceDiscoveryReceiver extends BroadcastReceiver {
@@ -171,7 +171,7 @@ public class BlaubotBluetoothDeviceDiscoveryReceiver extends BroadcastReceiver {
 	/**
 	 * The device object for the given macAddress, if the device was already discovered.
 	 * 
-	 * @param macAddress
+	 * @param macAddress the macAddress to search for
 	 * @return The device object for the given macAddress, if the device was already discovered - null otherwise 
 	 */
 	public BluetoothDevice getBluetoothDeviceByAddress(String macAddress) {

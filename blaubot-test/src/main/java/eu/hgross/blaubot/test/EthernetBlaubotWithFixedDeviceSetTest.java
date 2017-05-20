@@ -6,6 +6,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -13,10 +14,12 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import eu.hgross.blaubot.core.Blaubot;
 import eu.hgross.blaubot.core.BlaubotAdapterConfig;
 import eu.hgross.blaubot.core.ConnectionStateMachineConfig;
+import eu.hgross.blaubot.core.IBlaubotConnection;
 import eu.hgross.blaubot.core.State;
 import eu.hgross.blaubot.core.statemachine.IBlaubotConnectionStateMachineListener;
 import eu.hgross.blaubot.core.statemachine.states.FreeState;
@@ -33,7 +36,7 @@ import eu.hgross.blaubot.util.Log.LogLevel;
  * 
  * Note: These tests are based on the {@link BlaubotEthernetFixedDeviceSetBeacon} component without multicast. 
  * 
- * @author Henning Gross <mail.to@henning-gross.de>
+ * @author Henning Gross {@literal (mail.to@henning-gross.de)}
  *
  */
 public class EthernetBlaubotWithFixedDeviceSetTest {
@@ -42,7 +45,7 @@ public class EthernetBlaubotWithFixedDeviceSetTest {
 	/**
 	 * The number of blaubot instances to test with.
 	 */
-	private static final int NUMBER_OF_BLAUBOT_INSTANCES = 4; // min 3!
+	private static final int NUMBER_OF_BLAUBOT_INSTANCES = 3; // min 3!
 	private static final int MAX_STOPPING_TIMEOUT_FOR_ALL_INSTANCES = 30000;
 	private static final int MAX_START_TIME_FOR_ALL_INSTANCES = 30000;
 	/**
@@ -71,9 +74,29 @@ public class EthernetBlaubotWithFixedDeviceSetTest {
 	
 	@After
 	public void cleanUp() throws UnknownHostException, InterruptedException {
-		BlaubotJunitHelper.stopBlaubotInstances(instances, MAX_STOPPING_TIMEOUT_FOR_ALL_INSTANCES);
-		this.instances.clear();
+		boolean stopped = BlaubotJunitHelper.stopBlaubotInstances(instances, MAX_STOPPING_TIMEOUT_FOR_ALL_INSTANCES);
+		
 		Thread.sleep(WAIT_TIME_BETWEEN_TESTS);
+		if (!stopped) {
+            // on failure disconnect all connections manually
+            for (Blaubot blaubot : this.instances) {
+                List<IBlaubotConnection> conns = blaubot.getChannelManager().reset();
+                for (IBlaubotConnection conn : conns) {
+                    conn.disconnect();
+                }
+                
+                // and use the closeable impl
+                try {
+                    blaubot.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+			this.instances.clear();
+            throw new RuntimeException("Failed to stop blaubot instances");
+		}
+
+		this.instances.clear();
 	}
 
 
@@ -150,7 +173,7 @@ public class EthernetBlaubotWithFixedDeviceSetTest {
 	
 	@Test
 	/**
-	 * Lets the Blaubot instances form a kingdom and validates the participants states after a defined
+	 * Lets the Blaubot instances form a kingdom and validates the participant's states after a defined
 	 * time.
 	 */
 	public void testConnectivity() throws InterruptedException {
@@ -254,7 +277,7 @@ public class EthernetBlaubotWithFixedDeviceSetTest {
 		
 		// assert that we do not wait longer than the no peasants timeout!
 		Assert.assertTrue("Bad configuration (should: sleepTime < connectionStateMachineConfig.getKingWithoutPeasantsTimeout()) is: ("+sleepTime+" >= " + connectionStateMachineConfig.getKingWithoutPeasantsTimeout() + ").", sleepTime < connectionStateMachineConfig.getKingWithoutPeasantsTimeout());
-		Thread.sleep(sleepTime);
+		Thread.sleep(sleepTime/2);
 		
 		// now check that the former prince is king
 		Assert.assertTrue("The wrong blaubot instance is king. Expected " + princeDevice  + "; " + BlaubotJunitHelper.createBlaubotCensusString(currentKingdom), BlaubotJunitHelper.filterBlaubotInstancesByState(State.King, princeDevice).size() == 1);
@@ -294,7 +317,7 @@ public class EthernetBlaubotWithFixedDeviceSetTest {
 			Thread.sleep(sleepTime);
 			
 			// check if we have a valid kingdom now
-            BlaubotJunitHelper.blockUntilWeHaveOneKingdom(currentKingdom, 330000);
+            BlaubotJunitHelper.blockUntilWeHaveOneKingdom(currentKingdom, 60000);
 			Assert.assertTrue("The prince did not took over the throne fast enough. Current kingdom: "  + BlaubotJunitHelper.createBlaubotCensusString(currentKingdom), BlaubotJunitHelper.formOneKingdom(currentKingdom));
 			
 			// check if the former prince is now our king
@@ -340,6 +363,17 @@ public class EthernetBlaubotWithFixedDeviceSetTest {
         final List<BlaubotChannelManager> channelManagers = BlaubotJunitHelper.getChannelManagersFromKingdom(currentKingdom);
         ChannelManagerTest.testMessageOrder(channelManagers);
     }
+
+	@Test(timeout=320000)
+	public void testExcludeSender() throws InterruptedException, TimeoutException {
+		// form a kingdom
+		List<Blaubot> currentKingdom = instances;
+		Assert.assertTrue("The blaubot instances could not form a kingdom fast enough. States: " + BlaubotJunitHelper.createBlaubotCensusString(currentKingdom), BlaubotJunitHelper.blockUntilWeHaveOneKingdom(currentKingdom, CONNECTIVITY_TEST_TIMEOUT));
+
+		// get the channel managers for this kingdom
+		final List<BlaubotChannelManager> channelManagers = BlaubotJunitHelper.getChannelManagersFromKingdom(currentKingdom);
+		ChannelManagerTest.testExcludeSender(channelManagers);
+	}
 
 }
 

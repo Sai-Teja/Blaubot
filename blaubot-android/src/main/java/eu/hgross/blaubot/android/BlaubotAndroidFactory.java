@@ -13,6 +13,7 @@ import java.util.UUID;
 
 import eu.hgross.blaubot.android.bluetooth.BlaubotBluetoothAdapter;
 import eu.hgross.blaubot.android.bluetooth.BlaubotBluetoothBeacon;
+import eu.hgross.blaubot.android.geo.GeoLocationBeaconAndroid;
 import eu.hgross.blaubot.android.nfc.BlaubotNFCBeacon;
 import eu.hgross.blaubot.android.wifi.BlaubotWifiAdapter;
 import eu.hgross.blaubot.android.wifip2p.BlaubotWifiP2PBeacon;
@@ -21,21 +22,48 @@ import eu.hgross.blaubot.core.BlaubotDevice;
 import eu.hgross.blaubot.core.BlaubotUUIDSet;
 import eu.hgross.blaubot.core.IBlaubotAdapter;
 import eu.hgross.blaubot.core.IBlaubotDevice;
+import eu.hgross.blaubot.core.acceptor.ConnectionMetaDataDTO;
+import eu.hgross.blaubot.core.acceptor.discovery.BlaubotBeaconStore;
 import eu.hgross.blaubot.core.acceptor.discovery.IBlaubotBeacon;
+import eu.hgross.blaubot.core.connector.IBlaubotConnector;
 import eu.hgross.blaubot.ethernet.BlaubotBonjourBeacon;
 import eu.hgross.blaubot.ethernet.BlaubotEthernetAdapter;
 import eu.hgross.blaubot.ethernet.BlaubotEthernetMulticastBeacon;
+import eu.hgross.blaubot.geobeacon.GeoBeaconConstants;
+import eu.hgross.blaubot.geobeacon.GeoLocationBeacon;
 
 /**
  * Factory to create {@link Blaubot} instances for Android.
  *
- * @author Henning Gross <mail.to@henning-gross.de>
+ * @author Henning Gross {@literal (mail.to@henning-gross.de)}
  */
 public class BlaubotAndroidFactory extends eu.hgross.blaubot.core.BlaubotFactory {
-    // TODO: override the geolocationbeacon methods with an android specific implementation!
+    /**
+     * Creates an android specific GeoLocationBeacon using WebSockets.
+     * This will utilize Android's geolocation service for geo data.
+     * If you want to provide the geo data yourself, see {@link BlaubotAndroidFactory#createWebSocketGeoLocationBeacon(IBlaubotDevice, String, int)}.
+     * In order to use this beacon, you have to host a {@link eu.hgross.blaubot.geobeacon.GeoBeaconServer}.
+     * Note that you have to put blaubot-websockets as a dependency to your project.
+     *
+     * @param ownDevice        the ownDevice (Blaubot-Instance device)
+     * @param beaconServerHost the hostname or ip of the beacon server
+     * @param beaconServerPort the port on which the beacon server listens
+     * @return the geolocation beacon for android
+     * @throws ClassNotFoundException if blaubot-websockets is not in the classpath
+     */
+    public static GeoLocationBeaconAndroid createWebSocketGeoLocationBeaconForAndroid(IBlaubotDevice ownDevice, String beaconServerHost, int beaconServerPort) throws ClassNotFoundException {
+        IBlaubotConnector connector = createBlaubotWebsocketAdapter(ownDevice, beaconServerHost, beaconServerPort).getConnector(); // hacky ...
+        ConnectionMetaDataDTO webSocketMetaDataDTO = createWebSocketMetaDataDTO(beaconServerHost, "/blaubot", beaconServerPort);
+        BlaubotBeaconStore beaconStore = new BlaubotBeaconStore();
+        beaconStore.putConnectionMetaData(GeoBeaconConstants.GEO_BEACON_SERVER_UNIQUE_DEVICE_ID, webSocketMetaDataDTO);
+
+        GeoLocationBeaconAndroid geoLocationBeacon = new GeoLocationBeaconAndroid(beaconStore, connector);
+        return geoLocationBeacon;
+    }
+
     /**
      * Creates a blaubot instance using ethernet adapter and the NFC beacon.
-     * <p/>
+     * 
      * Note that you have to call some lifecycle methods onResume and onPause.
      * See BlaubotAndroid.
      *
@@ -61,7 +89,7 @@ public class BlaubotAndroidFactory extends eu.hgross.blaubot.core.BlaubotFactory
      * @param appUUID        the app's uuid
      * @param acceptorPort   the port of the connector's accepting socket
      * @param ownInetAddress the own {@link InetAddress} of the network to act on
-     * @return
+     * @return the blaubot instance
      */
     public static BlaubotAndroid createEthernetBlaubotWithBluetoothBeacon(UUID appUUID, int acceptorPort, InetAddress ownInetAddress) {
         if (ownInetAddress == null || appUUID == null) {
@@ -94,6 +122,8 @@ public class BlaubotAndroidFactory extends eu.hgross.blaubot.core.BlaubotFactory
      * Sets up a default {@link Blaubot} instance using only the bluetooth adapter.
      *
      * @param appUUID the app's unique uuid
+     * @param beaconPort the port on which the beacon accepts connections via tcp 
+     * @param beaconBroadcastPort the port on which the beacons broadcasts and receives udp multicasts
      * @return blaubot instance
      */
     public static BlaubotAndroid createBluetoothBlaubotWithMulticastBeacon(UUID appUUID, int beaconPort, int beaconBroadcastPort) {
@@ -183,9 +213,10 @@ public class BlaubotAndroidFactory extends eu.hgross.blaubot.core.BlaubotFactory
      * WARNING: This experimental and not recommended in production environments.
      *
      * @param appUUID         the app's unique uuid
-     * @param wifiManager
-     * @param beaconChannel
-     * @param acceptorChannel
+     * @param p2pWifiManager  android's p2p wifi manager service 
+     * @param wifiManager     the android wifi manager service
+     * @param beaconChannel   the beaconChannel (wifip2p) to be used for beacon transmissions
+     * @param acceptorChannel the acceptorChannel (wifip2p) on which connection are going to be accepted
      * @return blaubot instance
      */
     public static BlaubotAndroid createWifiP2PBlaubot(UUID appUUID, WifiP2pManager p2pWifiManager, WifiManager wifiManager, WifiP2pManager.Channel beaconChannel, WifiP2pManager.Channel acceptorChannel) {

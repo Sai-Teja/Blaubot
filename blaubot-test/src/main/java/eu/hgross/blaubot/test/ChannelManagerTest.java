@@ -1,31 +1,42 @@
 package eu.hgross.blaubot.test;
 
+import net.jodah.concurrentunit.Waiter;
+
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import eu.hgross.blaubot.core.BlaubotConstants;
 import eu.hgross.blaubot.admin.AbstractAdminMessage;
 import eu.hgross.blaubot.admin.StringAdminMessage;
+import eu.hgross.blaubot.core.BlaubotConstants;
+import eu.hgross.blaubot.core.BlaubotDevice;
+import eu.hgross.blaubot.core.IActionListener;
 import eu.hgross.blaubot.messaging.BlaubotChannelManager;
 import eu.hgross.blaubot.messaging.BlaubotMessage;
+import eu.hgross.blaubot.messaging.BlaubotMessageManager;
 import eu.hgross.blaubot.messaging.IBlaubotAdminMessageListener;
 import eu.hgross.blaubot.messaging.IBlaubotChannel;
 import eu.hgross.blaubot.messaging.IBlaubotMessageListener;
+import eu.hgross.blaubot.mock.BlaubotConnectionQueueMock;
 import eu.hgross.blaubot.test.mockups.ChannelManagerDeviceMockup;
 
 /**
  * A test for channel managers that can be used with any blaubot implementation by providing a
  * list of BlaubotChannelManager instances for each blaubot instance to the static methods.
- *
  */
 public class ChannelManagerTest {
     private static final int NUMBER_OF_CLIENTS = 5;
@@ -80,6 +91,143 @@ public class ChannelManagerTest {
         testAdminBMessageBroadcast(deviceMockups);
     }
 
+    @Test(timeout = 30000)
+    /**
+     * Tests if the ChannelManager's start/stop methods are idempotent
+     */
+    public void testStartStopIdempotence() throws InterruptedException {
+        BlaubotConnectionQueueMock mockConnnection = new BlaubotConnectionQueueMock(new BlaubotDevice("Device1"));
+        BlaubotConnectionQueueMock mockConnectionRemoteEndpoint = mockConnnection.getOtherEndpointConnection(new BlaubotDevice("Dev2"));
+        
+        final BlaubotMessageManager mm1 = new BlaubotMessageManager(mockConnnection);
+        final BlaubotMessageManager mm2 = new BlaubotMessageManager(mockConnectionRemoteEndpoint);
+
+        // send queues
+        final String mm1Msg = "mm1Msg", mm2Msg = "mm2Msg";
+        final ArrayList<String> mm1ToMm2 = new ArrayList();
+        final ArrayList<String> mm2ToMm1 = new ArrayList();
+        
+        // receive queues
+        final BlockingQueue mm1Received = new LinkedBlockingQueue();
+        final BlockingQueue mm2Received = new LinkedBlockingQueue();
+        
+        // fill send queues
+        for(int i=0; i<500;i++) {
+            mm1ToMm2.add(mm1Msg + i);
+            mm2ToMm1.add(mm2Msg + i);
+        }
+
+        
+        // add listeners to receivers
+        final CountDownLatch receivedAllMessagesLatch = new CountDownLatch(mm1ToMm2.size() + mm2ToMm1.size());
+        mm1.getMessageReceiver().addMessageListener(new IBlaubotMessageListener() {
+            @Override
+            public void onMessage(BlaubotMessage blaubotMessage) {
+                try {
+                    mm1Received.put(new String(blaubotMessage.getPayload(), BlaubotConstants.STRING_CHARSET));
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        mm2.getMessageReceiver().addMessageListener(new IBlaubotMessageListener() {
+            @Override
+            public void onMessage(BlaubotMessage blaubotMessage) {
+                try {
+                    mm2Received.put(new String(blaubotMessage.getPayload(), BlaubotConstants.STRING_CHARSET));
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        
+        // async start sending the messages from each side
+        final CountDownLatch sendingFinishedLatch = new CountDownLatch(2);
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                for (String current : mm1ToMm2) {
+                    BlaubotMessage msg = new BlaubotMessage();
+                    msg.setPayload(current.getBytes(BlaubotConstants.STRING_CHARSET));
+                    mm1.getMessageSender().sendMessage(msg);
+                }
+                sendingFinishedLatch.countDown();
+            }
+        }).start();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                for (String current : mm2ToMm1) {
+                    BlaubotMessage msg = new BlaubotMessage();
+                    msg.setPayload(current.getBytes(BlaubotConstants.STRING_CHARSET));
+                    mm2.getMessageSender().sendMessage(msg);
+                }
+                sendingFinishedLatch.countDown();
+            }
+        }).start();
+        
+        // start/stop calls
+        int iterations = 20;
+        // setup callbacks for the deactivations
+        final AtomicInteger finishedCountMm1 = new AtomicInteger(0);
+        final CountDownLatch deactivationListenerLatch = new CountDownLatch(iterations * 2 * 11);
+        final IActionListener actionListener = new IActionListener() {
+            @Override
+            public void onFinished() {
+                finishedCountMm1.incrementAndGet();
+                deactivationListenerLatch.countDown();
+            }
+        };
+        final CountDownLatch threadCountDownLatch = new CountDownLatch(iterations * 2); 
+        for(int i=0; i < 20; i++) {
+            for (final BlaubotMessageManager mm : Arrays.asList(mm1, mm2)) {
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mm.activate();
+                        mm.deactivate(actionListener);
+                        mm.deactivate(actionListener);
+                        mm.deactivate(actionListener);
+                        mm.activate();
+                        mm.activate();
+                        mm.activate();
+                        mm.deactivate(actionListener);
+                        mm.activate();
+                        mm.activate();
+                        mm.activate();
+                        mm.activate();
+                        mm.activate();
+                        mm.activate();
+                        mm.deactivate(actionListener);
+                        mm.deactivate(actionListener);
+                        mm.activate();
+                        mm.activate();
+                        mm.activate();
+                        mm.deactivate(actionListener);
+                        mm.deactivate(actionListener);
+                        mm.deactivate(actionListener);
+                        mm.deactivate(actionListener);
+                        mm.activate();
+                        mm.activate();
+                        mm.deactivate(actionListener);
+                        
+                        threadCountDownLatch.countDown();
+                    }
+                }).start();
+            }
+        }
+        
+        // await finish of sending and activate/deactivate calls
+        sendingFinishedLatch.await();
+        
+        threadCountDownLatch.await();
+        boolean deactivationTimedOut = !deactivationListenerLatch.await(10000, TimeUnit.MILLISECONDS);
+        Assert.assertFalse("Not all deactivation listeners were called", deactivationTimedOut);
+        
+        // We should have counted 2*11*iterations deactivation callbacks (11 times called deactivate)
+        Assert.assertEquals("The deactivation listener were not called", 2 * 11 * iterations, finishedCountMm1.get());
+    }
+    
     /**
      * Tests the admin broadcast on the given channelManagers.
      *
@@ -114,7 +262,6 @@ public class ChannelManagerTest {
                         return;
                     }
                     receivedMessages.add(adminMessage);
-                    //Assert.assertEquals("Message was not correctly received", expected, adminMessage);
                     latch.countDown();
                 }
             });
@@ -277,8 +424,12 @@ public class ChannelManagerTest {
     public void testMessageOrder() throws InterruptedException {
         final List<BlaubotChannelManager> deviceMockups = connectNetwork();
         testMessageOrder(deviceMockups);
+    }
 
-
+    @Test(timeout = 10000)
+    public void testExcludeSender() throws InterruptedException, TimeoutException {
+        final List<BlaubotChannelManager> deviceMockups = connectNetwork();
+        testExcludeSender(deviceMockups);
     }
 
     /**
@@ -357,4 +508,124 @@ public class ChannelManagerTest {
         }
     }
 
+    /**
+     * Tests if the excludeSender option of a channel's publish method is respected for some specific
+     * channel settings
+     * @param channelManagers the channel managers to test, note that they have to be already connected as one network
+     *                        and that the first element in the list has to be the master/king
+     */
+    public static void testExcludeSender(List<BlaubotChannelManager> channelManagers) throws InterruptedException, TimeoutException {
+        /*
+        We will build a network of two, subscribe to one channel number on both nodes and check that
+        they never receive their own message when the excludeSender option is used with the transmitReflexiveMessagesOption=false
+         */
+
+        BlaubotChannelManager king = channelManagers.get(0);
+        BlaubotChannelManager anyClient = channelManagers.get(1);
+
+        // define messages to be sent by king and client
+        final String kingMessage = "SentByKing";
+        final String clientMessage = "SentByClient";
+
+        // we await two messages, so we create a latch for that
+        final Waiter noReflexiveWaiter = new Waiter();
+
+        IBlaubotChannel kingChannel = king.createOrGetChannel((short) 1);
+        kingChannel.getChannelConfig().setTransmitReflexiveMessages(false);
+        IBlaubotMessageListener kingMessageListener = new IBlaubotMessageListener() {
+            @Override
+            public void onMessage(BlaubotMessage blaubotMessage) {
+                // assert that the king never receives the message he sent
+                String msgReceived = new String(blaubotMessage.getPayload(), BlaubotConstants.STRING_CHARSET);
+                System.out.println("kng" + msgReceived);
+                noReflexiveWaiter.assertTrue(!msgReceived.equals(kingMessage));
+
+                // but make sure we receive the client's message
+                noReflexiveWaiter.assertEquals(msgReceived, clientMessage);
+
+                noReflexiveWaiter.resume();
+            }
+        };
+        kingChannel.subscribe(kingMessageListener);
+
+        IBlaubotChannel clientChannel = anyClient.createOrGetChannel((short) 1);
+        clientChannel.getChannelConfig().setTransmitReflexiveMessages(false);
+        IBlaubotMessageListener clientMessageListener = new IBlaubotMessageListener() {
+            @Override
+            public void onMessage(BlaubotMessage blaubotMessage) {
+                // assert that the client never receives the message he sent
+                String msgReceived = new String(blaubotMessage.getPayload(), BlaubotConstants.STRING_CHARSET);
+                System.out.println("clnt" + msgReceived);
+                noReflexiveWaiter.assertTrue(!msgReceived.equals(clientMessage));
+
+                // but make sure we receive the kings message
+                noReflexiveWaiter.assertEquals(msgReceived, kingMessage);
+
+                noReflexiveWaiter.resume();
+            }
+        };
+        clientChannel.subscribe(clientMessageListener);
+
+        Thread.sleep(1000); // wait some time for subscriptions to be propagated
+
+        // send with exclude
+        clientChannel.publish(clientMessage.getBytes(), true);
+        kingChannel.publish(kingMessage.getBytes(), true);
+
+        // await the latch (we await 2 asserted messages)
+        noReflexiveWaiter.await(10000, 2);
+
+
+        // now again, we test it with setTransmitReflexiveMessages set to true
+        kingChannel.getChannelConfig().setTransmitReflexiveMessages(true);
+        clientChannel.getChannelConfig().setTransmitReflexiveMessages(true);
+
+        // we create new listeners
+        kingChannel.removeMessageListener(kingMessageListener);
+        clientChannel.removeMessageListener(clientMessageListener);
+
+        final Waiter reflexiveWaiter = new Waiter();
+        kingMessageListener = new IBlaubotMessageListener() {
+            @Override
+            public void onMessage(BlaubotMessage blaubotMessage) {
+                // assert that the king never receives the message he sent
+                String msgReceived = new String(blaubotMessage.getPayload(), BlaubotConstants.STRING_CHARSET);
+                System.out.println("kng" + msgReceived);
+                reflexiveWaiter.assertTrue(!msgReceived.equals(kingMessage));
+
+                // but make sure we receive the client's message
+                reflexiveWaiter.assertEquals(msgReceived, clientMessage);
+
+                reflexiveWaiter.resume();
+            }
+        };
+        clientMessageListener = new IBlaubotMessageListener() {
+            @Override
+            public void onMessage(BlaubotMessage blaubotMessage) {
+                // assert that the client never receives the message he sent
+                String msgReceived = new String(blaubotMessage.getPayload(), BlaubotConstants.STRING_CHARSET);
+                System.out.println("clnt" + msgReceived);
+                reflexiveWaiter.assertTrue(!msgReceived.equals(clientMessage));
+
+                // but make sure we receive the kings message
+                reflexiveWaiter.assertEquals(msgReceived, kingMessage);
+
+                reflexiveWaiter.resume();
+            }
+        };
+
+        kingChannel.subscribe(kingMessageListener);
+        clientChannel.subscribe(clientMessageListener);
+
+        Thread.sleep(300); // wait some time for subscriptions to be propagated/listeners be wired
+
+        // we don't need to wait for subscriptions to come through here
+        // send with exclude
+        clientChannel.publish(clientMessage.getBytes(), true);
+        kingChannel.publish(kingMessage.getBytes(), true);
+
+        // await the latch (we await 2 asserted messages)
+        reflexiveWaiter.await(10000, 2);
+    }
 }
+

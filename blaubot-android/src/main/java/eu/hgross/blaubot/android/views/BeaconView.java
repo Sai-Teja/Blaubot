@@ -30,10 +30,10 @@ import eu.hgross.blaubot.ui.IBlaubotDebugView;
 
 /**
  * Android view to display informations about the beacons registered to the BeaconService.
- * <p/>
+ * 
  * Add this view to a blaubot instance like this: stateView.registerBlaubotInstance(blaubot);
  *
- * @author Henning Gross <mail.to@henning-gross.de>
+ * @author Henning Gross {@literal (mail.to@henning-gross.de)}
  */
 public class BeaconView extends LinearLayout implements IBlaubotDebugView {
     private static final int MAX_EVENTS_DEFAULT = 5;

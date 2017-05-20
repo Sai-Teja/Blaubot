@@ -28,7 +28,7 @@ import eu.hgross.blaubot.util.Log;
  * A view to visualize a list of IBlaubotConnections beautifully ;-)
  * Implements IBlaubotDebugView but can also be used manually via addConnection, removeConnection and clearConnections.
  *
- * @author Henning Gross <mail.to@henning-gross.de>
+ * @author Henning Gross {@literal (mail.to@henning-gross.de)}
  */
 public class ConnectionView extends LinearLayout implements IBlaubotConnectionManagerListener, IBlaubotDebugView {
     private static final String LOG_TAG = "ConnectionView";
@@ -105,9 +105,9 @@ public class ConnectionView extends LinearLayout implements IBlaubotConnectionMa
     }
 
     /**
-     * Adds al ist of mConnections, then updates the view.
+     * Adds a list of mConnections, then updates the view.
      *
-     * @param connectionList
+     * @param connectionList the list of connections to be added
      */
     public void addConnections(Collection<IBlaubotConnection> connectionList) {
         for (IBlaubotConnection connection : connectionList) {
@@ -121,7 +121,7 @@ public class ConnectionView extends LinearLayout implements IBlaubotConnectionMa
     /**
      * Adds a connection and refreshes the view
      *
-     * @param connection
+     * @param connection the connection to be added
      */
     public void addConnection(IBlaubotConnection connection) {
         synchronized (mMonitor) {
@@ -133,7 +133,7 @@ public class ConnectionView extends LinearLayout implements IBlaubotConnectionMa
     /**
      * Removes a connection and refreshes the view
      *
-     * @param connection
+     * @param connection the connection to be added
      */
     public void removeConnection(IBlaubotConnection connection) {
         synchronized (mMonitor) {

@@ -1,0 +1,22 @@
+sudo: true
+language: android
+jdk: oraclejdk7
+env:
+  matrix:
+    - ANDROID_TARGET=android-23  ANDROID_ABI=armeabi-v7a
+
+android:
+  components:
+    - tools
+    - build-tools-23.0.2
+    - extra-android-m2repository
+    - extra-google-m2repository
+    - extra-google-support
+    - android-23
+    
+
+before_install:
+ - chmod +x gradlew
+ - touch local.properties
+
+script: ./gradlew clean build distZip

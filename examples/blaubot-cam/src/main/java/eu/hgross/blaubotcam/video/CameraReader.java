@@ -17,10 +17,10 @@ import eu.hgross.blaubot.util.Log;
 
 /**
  * Given a SurfaceView and a Camera object, this class provides some methods to start a simple MJPEG server serving the camera's preview image.
- * <p/>
+ * 
  * To integrate the preview into your app, you can use getSurfaceView() and add it to your layout.
  *
- * @author Henning Gross <mail.to@henning-gross.de>
+ * @author Henning Gross {@literal (mail.to@henning-gross.de)}
  */
 public class CameraReader extends Observable implements Camera.PreviewCallback, SurfaceHolder.Callback {
     private static final String LOG_TAG = "CameraReader";

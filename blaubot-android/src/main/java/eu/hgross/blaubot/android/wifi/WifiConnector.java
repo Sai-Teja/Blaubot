@@ -48,8 +48,8 @@ public class WifiConnector {
 
 	/**
 	 *
-	 * @param connectivityManager
-	 * @param wifiManager
+	 * @param connectivityManager android's connectivity manager service
+	 * @param wifiManager android's wifi manager service
 	 * @param ssid
 	 *            the network's SSID
 	 * @param psk
@@ -84,7 +84,7 @@ public class WifiConnector {
 	 * documentation. So here you get it ... we poll the state. This buggy
 	 * {@link android.content.BroadcastReceiver} system is a pain since version 1.0 ...
 	 * 
-	 * @author Henning Gross <mail.to@henning-gross.de>
+	 * @author Henning Gross {@literal (mail.to@henning-gross.de)}
 	 * 
 	 */
 	private abstract class PollNetworkStateThread extends Thread {
@@ -167,8 +167,7 @@ public class WifiConnector {
 	/**
 	 * Connects to the network (same as connect(boolean) but with async api)
 	 * 
-	 * @param callback
-	 * @return true iff success, false if failed
+	 * @param callback the callback to be called when the connect operation finished
 	 */
 	public void connect(final IWifiConnectorCallback callback) {
 		new Thread(new Runnable() {
